@@ -1,5 +1,9 @@
 #include "tensorflow/compiler/xla/tos_cpu_kernel.h"
 
+#include "tensorflow/tsl/platform/cpu_info.h"
+#include "tensorflow/tsl/platform/threadpool.h"
+#include "tensorflow/tsl/platform/env.h"
+
 namespace tos {
 
 tensorflow::se::DeviceMemoryBase Data::as_tf_data() const {
@@ -21,6 +25,17 @@ void Data::_print() const {
   std::cout << std::endl;
 }
 
+struct CpuKernel::ThreadPool {
+  explicit ThreadPool(const int num_threads)
+    : pool(new tsl::thread::ThreadPool(tsl::Env::Default(), "XLAEigen", num_threads)),
+      device(new Eigen::ThreadPoolDevice(pool->AsEigenThreadPool(), pool->NumThreads()))
+  {}
+
+  std::unique_ptr<tsl::thread::ThreadPool> pool;
+  std::unique_ptr<Eigen::ThreadPoolDevice> device;
+};
+
+
 CpuKernel::CpuKernel(std::string const& hlo)
 {
   std::unique_ptr<xla::HloModule> module = xla::LoadModuleFromData(hlo, "txt").value();
@@ -39,6 +54,10 @@ CpuKernel::CpuKernel(std::string const& hlo)
       scratch_buffer_size_ += allocation.size();
     }
   }
+
+  const int num_threads = tsl::port::MaxParallelism();
+  intra_op_thread_pool_.reset(new IntraOpThreadPool(num_threads));
+  run_options.set_intra_op_thread_pool(intra_op_thread_pool_->device.get());
 }
 
 void CpuKernel::operator()(

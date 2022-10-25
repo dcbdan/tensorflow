@@ -47,6 +47,8 @@ private:
   xla::cpu::CpuExecutable& cpu_executable_() const {
     return *(static_cast<xla::cpu::CpuExecutable*>(executable.get()));
   }
+  struct ThreadPool;
+  std::unique_ptr<ThreadPool> thread_pool_;
 };
 
 } // namespace tos
