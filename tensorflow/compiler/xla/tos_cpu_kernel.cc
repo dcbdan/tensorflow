@@ -56,8 +56,8 @@ CpuKernel::CpuKernel(std::string const& hlo)
   }
 
   const int num_threads = tsl::port::MaxParallelism();
-  intra_op_thread_pool_.reset(new IntraOpThreadPool(num_threads));
-  run_options.set_intra_op_thread_pool(intra_op_thread_pool_->device.get());
+  thread_pool_.reset(new ThreadPool(num_threads));
+  run_options.set_intra_op_thread_pool(thread_pool_->device.get());
 }
 
 void CpuKernel::operator()(
