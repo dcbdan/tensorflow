@@ -1105,3 +1105,16 @@ cc_header_only_library(
         "//tensorflow/core:stream_executor_headers_lib",
     ],
 )
+
+cc_library(
+    name = "tos_cpu_kernel",
+    srcs = ["tos_cpu_kernel.cc"],
+    hdrs = ["tos_cpu_kernel.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//tensorflow/compiler/xla/service/cpu:cpu_compiler",
+        "//tensorflow/compiler/xla/service/cpu:cpu_executable",
+        "//tensorflow/compiler/xla/tools:hlo_module_loader"
+    ]
+)
+
