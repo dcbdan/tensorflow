@@ -35,6 +35,7 @@ struct CpuKernel {
   ~CpuKernel();
 
   void operator()(
+    xla::ExecutableRunOptions* run_options,
     std::vector<Data> const& inns,
     std::vector<Data> const& outs,
     void* scratch_buffer = nullptr) const;
@@ -47,14 +48,24 @@ struct CpuKernel {
 
 private:
   std::unique_ptr<xla::Executable> executable;
-  xla::ExecutableRunOptions run_options;
   size_t scratch_buffer_size_;
 
   xla::cpu::CpuExecutable& cpu_executable_() const {
     return *(static_cast<xla::cpu::CpuExecutable*>(executable.get()));
   }
-  struct ThreadPool;
-  std::unique_ptr<ThreadPool> thread_pool_;
+};
+
+struct RunOptionsHolder {
+  RunOptionsHolder(const int num_threads);
+  RunOptionsHolder();
+  ~RunOptionsHolder();
+  
+  xla::ExecutableRunOptions* get_run_options();
+
+ private:
+  std::unique_ptr<tsl::thread::ThreadPool> pool;
+  std::unique_ptr<Eigen::ThreadPoolDevice> device;
+  xla::ExecutableRunOptions run_options;
 };
 
 } // namespace tos
