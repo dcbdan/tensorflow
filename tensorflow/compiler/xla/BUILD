@@ -1114,7 +1114,14 @@ cc_library(
     deps = [
         "//tensorflow/compiler/xla/service/cpu:cpu_compiler",
         "//tensorflow/compiler/xla/service/cpu:cpu_executable",
-        "//tensorflow/compiler/xla/tools:hlo_module_loader"
+        "//tensorflow/compiler/xla/tools:hlo_module_loader",
+        "//tensorflow/tsl/platform:env",
+        "//tensorflow/tsl/platform:errors",
+        "//tensorflow/tsl/platform:logging",
+        "//tensorflow/tsl/platform:platform_port",
+        "//tensorflow/tsl/platform:status",
+        "//tensorflow/compiler/xla:types",
+        "//third_party/eigen3",
     ]
 )
 

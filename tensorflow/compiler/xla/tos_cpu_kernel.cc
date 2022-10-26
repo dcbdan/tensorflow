@@ -1,8 +1,16 @@
+#define EIGEN_USE_THREADS
+
+#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
+
+#include "tensorflow/compiler/xla/types.h"
+
 #include "tensorflow/compiler/xla/tos_cpu_kernel.h"
 
 #include "tensorflow/tsl/platform/cpu_info.h"
 #include "tensorflow/tsl/platform/threadpool.h"
 #include "tensorflow/tsl/platform/env.h"
+#include "tensorflow/tsl/platform/errors.h"
+#include "tensorflow/tsl/platform/logging.h"
 
 namespace tos {
 
@@ -18,7 +26,7 @@ void Data::_iota() {
   std::iota(data, data + size, 0.0);
 }
 
-void Data::_print() const {
+void Data::_print() {
   for(int i = 0; i != size; ++i) {
     std::cout << data[i] << " ";
   }
@@ -27,7 +35,7 @@ void Data::_print() const {
 
 struct CpuKernel::ThreadPool {
   explicit ThreadPool(const int num_threads)
-    : pool(new tsl::thread::ThreadPool(tsl::Env::Default(), "XLAEigen", num_threads)),
+    : pool(new ::tsl::thread::ThreadPool(tsl::Env::Default(), "XLAEigen", num_threads)),
       device(new Eigen::ThreadPoolDevice(pool->AsEigenThreadPool(), pool->NumThreads()))
   {}
 
@@ -60,11 +68,16 @@ CpuKernel::CpuKernel(std::string const& hlo)
   run_options.set_intra_op_thread_pool(thread_pool_->device.get());
 }
 
+CpuKernel::~CpuKernel() {}
+
 void CpuKernel::operator()(
   std::vector<Data> const& inns,
   std::vector<Data> const& outs,
   void* scratch_buffer) const
 {
+  // TODO: figure out how to support multiple outputs
+  assert(outs.size() == 1);
+
   auto& cpu_executable = this->cpu_executable_();
 
   bool did_allocate = false;
@@ -81,17 +94,19 @@ void CpuKernel::operator()(
   buffers.reserve(allocations.size());
 
   auto iter_out = outs.begin();
-  auto iter_inn = inns.begin();
   size_t offset = 0;
 
   for(auto const& allocation: allocations) {
     if(allocation.IsInputOrOutput()) {
-      if(iter_out != outs.end()) {
-        buffers.emplace_back(iter_out->as_tf_data());
-        iter_out++;
+      if(allocation.is_entry_computation_parameter()) {
+        auto const& data = inns[allocation.parameter_number()];
+	assert(data.size * sizeof(float) >= allocation.size());
+        buffers.emplace_back(data.as_tf_data());
       } else {
-        buffers.emplace_back(iter_inn->as_tf_data());
-        iter_inn++;
+        auto const& data = *iter_out;
+	assert(data.size * sizeof(float) >= allocation.size());
+        buffers.emplace_back(data.as_tf_data());
+        iter_out++;
       }
     } else if(allocation.is_constant() || allocation.is_thread_local()) {
       buffers.emplace_back(tensorflow::se::DeviceMemoryBase{});
@@ -132,8 +147,23 @@ void CpuKernel::test(bool print) {
     }
   }
 
-  this->operator()(inns, outs);
+  std::cout << "Before test:" << std::endl;
   if(print) {
+    for(auto inn: inns) {
+      inn._print();
+    }
+    for(auto out: outs) {
+      out._print();
+    }
+  }
+
+  this->operator()(inns, outs);
+
+  std::cout << "After test:" << std::endl;
+  if(print) {
+    for(auto inn: inns) {
+      inn._print();
+    }
     for(auto out: outs) {
       out._print();
     }

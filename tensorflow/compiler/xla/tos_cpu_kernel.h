@@ -12,6 +12,10 @@
 #include <algorithm> // fill
 #include <numeric>   // iota
 
+namespace Eigen {
+struct ThreadPoolDevice;
+}
+
 namespace tos {
 
 struct Data {
@@ -22,11 +26,13 @@ struct Data {
 
   void _fill(float val);
   void _iota();
-  void _print() const;
+  void _print();
 };
 
 struct CpuKernel {
   CpuKernel(std::string const& hlo);
+  
+  ~CpuKernel();
 
   void operator()(
     std::vector<Data> const& inns,
