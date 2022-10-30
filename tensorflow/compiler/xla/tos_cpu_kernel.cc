@@ -14,6 +14,22 @@
 
 namespace tos {
 
+size_t _align_size = 64;
+
+size_t mem_align_offset(void* mem_, size_t align_to) {
+  static_assert(sizeof(size_t) >= sizeof(std::uintptr_t));
+  size_t mem = reinterpret_cast<std::uintptr_t>(mem_);
+
+  // An easier to understand but slower way to do it...
+  //    for(int i = 0; i != align_to; ++i) {
+  //      if((mem + i) % align_to == 0) {
+  //        return i;
+  //      }
+  //    }
+
+  return ((mem + (align_to-1)) & ~(align_to-1)) - mem;
+}
+
 RunOptionsHolder::RunOptionsHolder(const int num_threads)
   : pool(new ::tsl::thread::ThreadPool(tsl::Env::Default(), "XLAEigen", num_threads)),
     device(new Eigen::ThreadPoolDevice(pool->AsEigenThreadPool(), pool->NumThreads()))
@@ -53,6 +69,7 @@ void Data::_print() {
 CpuKernel::CpuKernel(std::string const& hlo)
 {
   std::unique_ptr<xla::HloModule> module = xla::LoadModuleFromData(hlo, "txt").value();
+
   xla::cpu::CpuCompiler compiler;
   xla::Compiler::CompileOptions dummy;
   executable = compiler.RunBackend(std::move(module), nullptr, dummy).value();
@@ -66,6 +83,7 @@ CpuKernel::CpuKernel(std::string const& hlo)
        !allocation.is_thread_local())
     {
       scratch_buffer_size_ += allocation.size();
+      scratch_buffer_size_ += _align_size; // for memory alignment
     }
   }
 }
@@ -115,12 +133,14 @@ void CpuKernel::operator()(
       buffers.emplace_back(tensorflow::se::DeviceMemoryBase{});
     } else {
       auto sz = allocation.size();
+      offset += mem_align_offset(scratch_buffer_char + offset, _align_size);
       buffers.emplace_back(tensorflow::se::DeviceMemoryBase{scratch_buffer_char + offset, sz});
       offset += sz;
     }
   }
 
   auto status = cpu_executable.ExecuteComputeFunction(run_options, buffers, nullptr);
+  // TODO: check status
 
   if(did_allocate) {
     delete[] scratch_buffer_char;
